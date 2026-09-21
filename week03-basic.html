@@ -26,8 +26,17 @@ canvas{
 | 남은 시간 : <span id="time">30</span>초
 </p>
 <button id="startButton" type="button">게임 시작</button>
+<button id="slowButton" type="button" disabled>슬로 모션 (1회)</button>
+<p>연속 명중: <span id="combo">0</span>회 | 최고 점수: <span id="best">0</span>점<br>
+시간 보너스 진행: <span id="bonusProgress">0 / 10</span></p>
 <p id="message" role="status">게임 시작 버튼을 누르세요.</p>
 <p>공 클릭: +1점 · 공 밖 클릭: -2점<br>점수가 높으면 공이 작아지고, 낮으면 커집니다.</p>
+<details><summary>새로운 기능 5가지</summary>
+<p>① 다섯 번째 공마다 황금 공 등장: 잡으면 +3점<br>
+② 3연속 명중마다 추가 +2점: 빗나가면 콤보 초기화<br>
+③ 슬로 모션 버튼: 한 게임에 한 번, 3초간 이동 속도 35%<br>
+④ 누적 10회 명중마다 +3초: 한 게임에 최대 3번<br>
+⑤ 최고 최종 점수를 이 브라우저에 저장</p></details>
 
 <canvas
     id="gameCanvas"
@@ -46,6 +55,26 @@ canvas{
     const timeText = document.getElementById("time");
     const startButton = document.getElementById("startButton");
     const message = document.getElementById("message");
+    const slowButton = document.getElementById("slowButton");
+    const comboText = document.getElementById("combo");
+    const bestText = document.getElementById("best");
+    const bonusProgress = document.getElementById("bonusProgress");
+    let combo = 0;
+    let hits = 0;
+    let timeBonuses = 0;
+    let golden = false;
+    let slowUsed = false;
+    let slowUntil = 0;
+    let lastFrame = 0;
+    let bestScore = 0;
+    let storageAvailable = true;
+    try { // 저장을 허용하지 않는 브라우저에서도 게임은 실행합니다.
+        const saved = Number(localStorage.getItem("ballCatch.bestScore"));
+        if (Number.isFinite(saved) && saved > 0) bestScore = saved;
+    } catch (error) {
+        storageAvailable = false;
+    }
+    bestText.textContent = bestScore;
 
     let timeLeft = 30; // 남은 게임 시간을 초 단위로 저장하며, 초기값은 30초입니다.
     let gameRunning = false; // 게임 진행 여부를 저장합니다. false는 시작 전 또는 종료 상태를 뜻합니다.
@@ -60,6 +89,17 @@ canvas{
         cancelAnimationFrame(animId); // 기존 애니메이션을 취소해 중복 실행을 막습니다.
 
         score = 0; // 점수를 초기화합니다.
+        combo = 0;
+        hits = 0;
+        timeBonuses = 0;
+        golden = false;
+        slowUsed = false;
+        slowUntil = 0;
+        comboText.textContent = 0;
+        bonusProgress.textContent = "0 / 10";
+        slowButton.disabled = false;
+        slowButton.textContent = "슬로 모션 (1회)";
+        lastFrame = performance.now();
         speedLevel = 1; // 속도 단계를 처음으로 되돌립니다.
         timeLeft = 30; // 제한 시간을 30초로 설정합니다.
         gameRunning = true; // 게임을 진행 상태로 바꿉니다.
@@ -87,21 +127,56 @@ canvas{
         timeLeft = Math.max(0, Math.ceil((endTime - performance.now()) / 1000));
         timeText.textContent = timeLeft;
         if (timeLeft === 0) endGame();
+        if (gameRunning && slowUsed) {
+            const remaining = Math.max(0, Math.ceil((slowUntil - performance.now()) / 1000));
+            slowButton.textContent = remaining > 0 ? "슬로 모션 " + remaining + "초" : "슬로 모션 사용 완료";
+        }
     }
 
     function endGame() {
+        if (!gameRunning) return;
         gameRunning = false; // 시간이 끝나면 공 이동과 점수 획득을 멈춥니다.
         clearInterval(timerId);
         cancelAnimationFrame(animId);
         startButton.textContent = "다시 시작";
         message.textContent = "게임 종료! 최종 점수: " + score + "점";
+        slowButton.disabled = true;
+        slowButton.textContent = "슬로 모션 (게임 종료)";
+        if (score > bestScore) {
+            bestScore = score;
+            bestText.textContent = bestScore;
+            message.textContent += " 최고 기록 달성!";
+            try {
+                localStorage.setItem("ballCatch.bestScore", String(bestScore));
+            } catch (error) {
+                storageAvailable = false;
+            }
+        }
+        if (!storageAvailable) message.textContent += " (기록은 현재 실행 중에만 유지됩니다.)";
     }
+
+    slowButton.addEventListener("click", function() {
+        updateTime();
+        if (!gameRunning || slowUsed) return;
+        slowUsed = true;
+        slowUntil = performance.now() + 3000;
+        slowButton.disabled = true;
+        slowButton.textContent = "슬로 모션 3초";
+        message.textContent = "3초 동안 공이 느려집니다!";
+    });
 
     function drawball(){
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
-        ctx.fillStyle = "tomato";
+        ctx.fillStyle = golden ? "gold" : "tomato";
         ctx.fill();
+        if (golden) { // 색상과 글자로 황금 공을 구분합니다.
+            ctx.fillStyle = "#503400";
+            ctx.font = "bold 18px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("+3", ball.x, ball.y);
+        }
     }
     function renderGame() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -114,10 +189,10 @@ canvas{
         ball.y = Math.max(ball.radius, Math.min(canvas.height - ball.radius, ball.y));
     }
 
-    function updateBall() 
+    function updateBall(step = 1)
     {
-        ball.x += ball.dx;
-        ball.y += ball.dy;
+        ball.x += ball.dx * step;
+        ball.y += ball.dy * step;
 
         if(ball.x+ball.radius > canvas.width || ball.x-ball.radius < 0){
             ball.dx = -ball.dx;
@@ -132,7 +207,10 @@ canvas{
     {
         updateTime(); // 제한 시간이 지난 프레임에서는 이동하지 않습니다.
         if (!gameRunning) return; // 게임 진행 중에만 다음 화면을 그립니다.
-        updateBall();
+        const now = performance.now();
+        const frameStep = Math.min((now - lastFrame) / (1000 / 60), 3);
+        lastFrame = now;
+        updateBall(frameStep * (now < slowUntil ? 0.35 : 1));
         renderGame();
         animId = requestAnimationFrame(drawGame); // 중지할 수 있도록 요청 ID를 저장합니다.
     }
@@ -152,7 +230,20 @@ canvas{
 
         const distance = Math.sqrt(dx * dx + dy * dy);
         if (distance <= ball.radius) {
-            score++;
+            hits++;
+            combo++;
+            const earned = (golden ? 3 : 1) + (combo % 3 === 0 ? 2 : 0);
+            score += earned;
+            message.textContent = (golden ? "황금 공! " : "명중! ") + "+" + earned + "점";
+            if (combo % 3 === 0) message.textContent += " · " + combo + "콤보 보너스!";
+            if (hits % 10 === 0 && timeBonuses < 3) {
+                endTime += 3000;
+                timeBonuses++;
+                message.textContent += " · 시간 +3초!";
+                updateTime();
+            }
+            bonusProgress.textContent = timeBonuses === 3 ? "보너스 3회 완료" : (hits % 10) + " / 10 (" + timeBonuses + "/3회 지급)";
+            golden = (hits + 1) % 5 === 0;
             updateBallSize(); // 오른 점수에 맞춰 공을 줄인 뒤 새 위치를 정합니다.
             speedLevel++;
             speedText.textContent = speedLevel + "단계";
@@ -164,9 +255,12 @@ canvas{
             moveBallRandom();
         } else {
             score -= 2; // 공 밖을 클릭하면 2점 차감하며, 음수 점수도 허용합니다.
+            combo = 0;
+            message.textContent = "빗나갔어요! -2점 · 콤보 초기화";
             updateBallSize(); // 내려간 점수에 맞춰 공을 키웁니다.
         }
         scoreText.textContent = score;
+        comboText.textContent = combo;
         renderGame(); // 변경된 크기와 위치를 즉시 화면에 반영합니다.
     });
 
