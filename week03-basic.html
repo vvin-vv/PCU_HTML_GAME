@@ -1,0 +1,179 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>공 잡기 게임</title>
+
+<style>
+body{
+    text-align:center;
+    font-family:Arial;
+}
+
+canvas{
+    border:2px solid black;
+}
+</style>
+
+</head>
+<body>
+
+<h1>공 잡기 게임</h1>
+
+<p>
+점수 :
+<span id="score">0</span> | <span id="speed">1단계</span>
+| 남은 시간 : <span id="time">30</span>초
+</p>
+<button id="startButton" type="button">게임 시작</button>
+<p id="message" role="status">게임 시작 버튼을 누르세요.</p>
+<p>공 클릭: +1점 · 공 밖 클릭: -2점<br>점수가 높으면 공이 작아지고, 낮으면 커집니다.</p>
+
+<canvas
+    id="gameCanvas"
+    width="600"
+    height="400">
+</canvas>
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+
+    const scoreText = document.getElementById("score");
+    let score = 0;
+    const speedText = document.getElementById("speed");
+    let speedLevel = 1;
+    const timeText = document.getElementById("time");
+    const startButton = document.getElementById("startButton");
+    const message = document.getElementById("message");
+
+    let timeLeft = 30; // 남은 게임 시간을 초 단위로 저장하며, 초기값은 30초입니다.
+    let gameRunning = false; // 게임 진행 여부를 저장합니다. false는 시작 전 또는 종료 상태를 뜻합니다.
+    let timerId; // 타이머를 시작할 때 반환되는 ID를 저장해, 나중에 clearInterval(timerId)로 중지할 때 사용합니다.
+    let animId; // requestAnimationFrame의 반환 ID를 저장해, 나중에 cancelAnimationFrame(animId)로 취소할 때 사용합니다.
+    let endTime = 0; // 실제 종료 시각을 저장해 타이머 호출이 늦어져도 남은 시간을 맞춥니다.
+
+    const ball = {x:300, y:200, radius:100, dx:3, dy:2};
+
+    function startGame() {
+        clearInterval(timerId); // 다시 시작할 때 기존 타이머를 중지합니다.
+        cancelAnimationFrame(animId); // 기존 애니메이션을 취소해 중복 실행을 막습니다.
+
+        score = 0; // 점수를 초기화합니다.
+        speedLevel = 1; // 속도 단계를 처음으로 되돌립니다.
+        timeLeft = 30; // 제한 시간을 30초로 설정합니다.
+        gameRunning = true; // 게임을 진행 상태로 바꿉니다.
+        ball.x = 300; // 공을 중앙으로 되돌립니다.
+        ball.y = 200; // 공 중심의 세로 위치를 초기화합니다.
+        ball.dx = 3; // 공의 이동 속도를 초기화합니다.
+        ball.dy = 2; // 공의 세로 이동 속도를 초기화합니다.
+        updateBallSize(); // 초기 점수 0점에 맞춰 반지름을 100으로 되돌립니다.
+        endTime = performance.now() + timeLeft * 1000;
+
+        scoreText.textContent = score;
+        speedText.textContent = speedLevel + "단계";
+        timeText.textContent = timeLeft;
+        startButton.textContent = "다시 시작";
+        message.textContent = "공을 클릭해서 점수를 올려보세요!";
+
+        timerId = setInterval(updateTime, 100); // 실제 남은 시간을 주기적으로 확인합니다.
+
+        renderGame(); // 초기 위치 (300, 200)에 공을 먼저 표시합니다.
+        animId = requestAnimationFrame(drawGame); // 다음 프레임부터 공을 움직입니다.
+    }
+
+    function updateTime() {
+        if (!gameRunning) return;
+        timeLeft = Math.max(0, Math.ceil((endTime - performance.now()) / 1000));
+        timeText.textContent = timeLeft;
+        if (timeLeft === 0) endGame();
+    }
+
+    function endGame() {
+        gameRunning = false; // 시간이 끝나면 공 이동과 점수 획득을 멈춥니다.
+        clearInterval(timerId);
+        cancelAnimationFrame(animId);
+        startButton.textContent = "다시 시작";
+        message.textContent = "게임 종료! 최종 점수: " + score + "점";
+    }
+
+    function drawball(){
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+        ctx.fillStyle = "tomato";
+        ctx.fill();
+    }
+    function renderGame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawball();
+    }
+
+    function updateBallSize() {
+        ball.radius = Math.max(20, Math.min(150, 100 - score * 5)); // 1점당 반지름 5 감소, 최소 20·최대 150입니다.
+        ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x)); // 커진 공이 벽 밖으로 나가지 않게 보정합니다.
+        ball.y = Math.max(ball.radius, Math.min(canvas.height - ball.radius, ball.y));
+    }
+
+    function updateBall() 
+    {
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        if(ball.x+ball.radius > canvas.width || ball.x-ball.radius < 0){
+            ball.dx = -ball.dx;
+            ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x)); // 공을 가로 경계 안에 둡니다.
+        }
+        if(ball.y+ball.radius > canvas.height || ball.y-ball.radius < 0){
+            ball.dy = -ball.dy;
+            ball.y = Math.max(ball.radius, Math.min(canvas.height - ball.radius, ball.y)); // 공을 세로 경계 안에 둡니다.
+        }
+    }
+    function drawGame()
+    {
+        updateTime(); // 제한 시간이 지난 프레임에서는 이동하지 않습니다.
+        if (!gameRunning) return; // 게임 진행 중에만 다음 화면을 그립니다.
+        updateBall();
+        renderGame();
+        animId = requestAnimationFrame(drawGame); // 중지할 수 있도록 요청 ID를 저장합니다.
+    }
+    drawball(); // 시작 전에는 정지한 공만 표시합니다.
+    startButton.addEventListener("click", startGame); // 버튼을 누르면 게임을 시작합니다.
+
+    canvas.addEventListener("click", function(event) {
+        updateTime(); // 종료 시각 이후의 클릭은 점수에 반영하지 않습니다.
+        if (!gameRunning) return; // 시작 전이나 종료 후에는 클릭 점수를 계산하지 않습니다.
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = (event.clientX - rect.left - canvas.clientLeft) * canvas.width / canvas.clientWidth;
+        const mouseY = (event.clientY - rect.top - canvas.clientTop) * canvas.height / canvas.clientHeight;
+
+        const dx = mouseX - ball.x;
+        const dy = mouseY - ball.y; 
+
+
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance <= ball.radius) {
+            score++;
+            updateBallSize(); // 오른 점수에 맞춰 공을 줄인 뒤 새 위치를 정합니다.
+            speedLevel++;
+            speedText.textContent = speedLevel + "단계";
+            if(ball.dx > 0) {
+                ball.dx += 0.5;
+            }else {
+                ball.dx -= 0.5;
+            }
+            moveBallRandom();
+        } else {
+            score -= 2; // 공 밖을 클릭하면 2점 차감하며, 음수 점수도 허용합니다.
+            updateBallSize(); // 내려간 점수에 맞춰 공을 키웁니다.
+        }
+        scoreText.textContent = score;
+        renderGame(); // 변경된 크기와 위치를 즉시 화면에 반영합니다.
+    });
+
+function moveBallRandom() {
+    ball.x = Math.random() * (canvas.width - ball.radius*2) + ball.radius;
+    ball.y = Math.random() * (canvas.height - ball.radius*2) + ball.radius;
+}
+</script>
+</body>
+</html>
