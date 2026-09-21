@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>예제 1: 웃는 스마일</title>
+    <title>예제 1: 무지개 과녁</title>
 </head>
 
 <body>
-    <canvas id="myCanvas" width="400" height="400" style="background: #222;" role="img" aria-label="노란 얼굴에 두 눈과 웃는 입이 있는 스마일"></canvas>
+    <canvas id="myCanvas" width="400" height="400" style="background: #222;"></canvas>
     <script>
         const canvas = document.getElementById("myCanvas");
         const ctx = canvas.getContext("2d");
@@ -15,9 +15,11 @@
         const centerY = canvas.height / 2;
 
         const circles = [
-            { color: "orange", radius: 120},
-            { color: "yellow", radius: 115},
-
+            { color: "red", radius: 120 },
+            { color: "orange", radius: 95 },
+            { color: "yellow", radius: 70 },
+            { color: "green", radius: 45 },
+            { color: "blue", radius: 20 }
         ];
 
         circles.forEach((circle) => {
@@ -26,22 +28,6 @@
             ctx.fillStyle = circle.color;
             ctx.fill();
         });
-
-        // 두 눈
-        [-40, 40].forEach((offsetX) => {
-            ctx.beginPath();
-            ctx.arc(centerX + offsetX, centerY - 30, 12, 0, Math.PI * 2);
-            ctx.fillStyle = "#222";
-            ctx.fill();
-        });
-
-        // 아래쪽 반원으로 웃는 입 그리기
-        ctx.beginPath();
-        ctx.arc(centerX, centerY + 5, 60, 0, Math.PI);
-        ctx.strokeStyle = "#222";
-        ctx.lineWidth = 7;
-        ctx.lineCap = "round";
-        ctx.stroke();
     </script>
 
 </body>
