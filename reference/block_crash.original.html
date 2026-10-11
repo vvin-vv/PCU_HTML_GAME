@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8"> <!-- 문서의 문자 인코딩을 UTF-8로 지정하여 한글 깨짐을 방지 -->
+    <title>벽돌깨기 게임</title> <!-- 브라우저 상단 탭 타이틀 이름 지정 -->
+
+    <style>
+        body {
+            text-align: center; /* 전체 요소를 화면 가운데로 정렬 */
+            font-family: Arial; /* 기본 폰트를 Arial로 지정 */
+            background: #f5f5f5; /* 전체 배경색 지정 */
+        }
+
+        canvas {
+            border: 2px solid black; /* 캔버스 테두리를 검은색 실선으로 설정 */
+            background: #f9f9f9; /* 캔버스 배경색 지정 */
+            cursor: pointer; /* 캔버스에 마우스를 올렸을 때 손가락 모양 커서로 변경 */
+        }
+
+        /* 상단 컨트롤 패널(시작 버튼 & 속도 선택 버튼) 레이아웃 스타일 */
+        .controls-container {
+            display: flex; /* 가로 배치 */
+            justify-content: center; /* 가로 중앙 정렬 */
+            align-items: center; /* 세로 중앙 정렬 */
+            gap: 20px; /* 요소 간 간격 */
+            margin-bottom: 15px; /* 아래 여백 */
+        }
+
+        .control-group {
+            background: #fff; /* 흰색 배경 */
+            padding: 10px 15px; /* 안쪽 여백 */
+            border-radius: 8px; /* 모서리 둥글게 */
+            border: 1px solid #ccc; /* 테두리 */
+        }
+
+        .option-btn {
+            padding: 6px 12px; /* 안쪽 여백 */
+            margin: 0 2px; /* 좌우 간격 */
+            font-size: 13px; /* 글자 크기 */
+            font-weight: bold; /* 글자 굵게 */
+            cursor: pointer; /* 손가락 커서 */
+            border: 1px solid #444; /* 테두리 */
+            background: #fff; /* 배경색 */
+            border-radius: 4px; /* 모서리 둥글게 */
+            transition: 0.2s; /* 변환 시간 */
+        }
+
+        .option-btn:hover {
+            background: #e0e0e0; /* 호버 배경색 */
+        }
+
+        .option-btn.active {
+            background: #333; /* 선택된 버튼 배경색 어둡게 */
+            color: #fff; /* 선택된 버튼 글자색 흰색 */
+        }
+
+        /* 상단 메인 게임 시작 버튼 스타일 */
+        .start-btn {
+            padding: 10px 24px; /* 안쪽 여백 */
+            font-size: 16px; /* 글자 크기 */
+            font-weight: bold; /* 글자 굵게 */
+            color: #fff; /* 글자색 흰색 */
+            background-color: #28a745; /* 초록색 배경 */
+            border: none; /* 테두리 제거 */
+            border-radius: 6px; /* 모서리 둥글게 */
+            cursor: pointer; /* 손가락 커서 */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 그림자 효과 */
+            transition: 0.2s; /* 변환 시간 */
+        }
+
+        .start-btn:hover {
+            background-color: #218838; /* 호버 시 진한 초록색 */
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>벽돌깨기 게임</h1> <!-- 게임 화면 상단 메인 제목 -->
+
+    <!-- 공 속도 선택 및 시작 버튼 상단 컨트롤 UI 영역 -->
+    <div class="controls-container">
+        <!-- 게임 시작 버튼 (클릭 시 startGame 실행) -->
+        <button class="start-btn" onclick="startGame()">▶ 게임 시작</button>
+
+        <!-- 공 속도 선택 버튼 그룹 -->
+        <div class="control-group">
+            <span>공 속도: </span>
+            <button class="option-btn speed-btn" onclick="setBallSpeed(1)">1단계(느림)</button>
+            <button class="option-btn speed-btn active" onclick="setBallSpeed(2)">2단계(보통)</button>
+            <button class="option-btn speed-btn" onclick="setBallSpeed(3)">3단계(빠름)</button>
+            <button class="option-btn speed-btn" onclick="setBallSpeed(4)">4단계(매우 빠름)</button>
+            <button class="option-btn speed-btn" onclick="setBallSpeed(5)">5단계(극초속)</button>
+        </div>
+    </div>
+
+    <p>
+        점수: <span id="score">0</span> | <!-- 실시간 점수를 표시할 span 요소 -->
+        목숨: <span id="lives">3</span>  <!-- 남은 목숨을 표시할 span 요소 -->
+    </p>
+
+    <!-- 아이템 종류 및 조작법 안내 문구 -->
+    <p>조작: ← / → 방향키 | 아이템: 🟢 패들 확대 (8초) / 🟡 목숨 +1</p>
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas'); // HTML 캔버스 요소를 자바스크립트로 가져오기
+    const ctx = canvas.getContext('2d'); // 캔버스에 2D 그래픽을 그리기 위한 2D 렌더링 컨텍스트 가져오기
+
+    const scoreText = document.getElementById('score'); // 점수를 표시해 줄 HTML span 요소 가져오기
+    const livesText = document.getElementById('lives'); // 목숨을 표시해 줄 HTML span 요소 가져오기
+
+    let score = 0; // 초기 게임 점수 변수 (0점으로 시작)
+    let lives = 3; // 초기 목숨 수 변수 (3개로 시작)
+    let isGameOver = false; // 게임 오버 상태를 관리하는 플래그 변수
+    let isGameCleared = false; // 게임 클리어(승리) 상태를 관리하는 플래그 변수
+    let gameStarted = false; // 게임 시작 작동 상태 변수 (false일 때 대기 상태 화면 렌더링)
+
+    // 단계별 공 이동 속도 수치 테이블 (1~5단계)
+    const speedTable = {
+        1: 3,  // 1단계 (느림)
+        2: 5,  // 2단계 (보통)
+        3: 7,  // 3단계 (빠름)
+        4: 9,  // 4단계 (매우 빠름)
+        5: 12  // 5단계 (극초속)
+    };
+
+    let selectedSpeedLevel = 2; // 현재 선택된 속도 단계 변수 (기본값: 2단계)
+    let items = []; // 화면에 떨어지는 아이템 객체들을 저장할 배열
+    let paddleExpandTimer = null; // 패들 확대 효과 타이머의 ID를 저장할 변수
+
+    // 플레이어 패들(받침대)의 초기 상태 및 속성 객체
+    const paddle = {
+        baseWidth: 100, // 패들의 기본 가로 너비 (100px)
+        width: 100,     // 현재 적용 중인 패들 가로 너비
+        height: 12,     // 패들의 세로 높이 (12px)
+        x: canvas.width / 2 - 50, // 패들의 초기 X 위치 (캔버스 중앙)
+        y: canvas.height - 30,     // 패들의 초기 Y 위치
+        speed: 8        // 패들 이동 속도 (8px)
+    };
+
+    function drawPaddle() { // [함수] 패들을 캔버스 상에 사각형 형태로 그려주는 함수
+        ctx.fillStyle = '#333'; // 패들 채우기 색상을 어두운 회색으로 지정
+        ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height); // 지정된 위치와 크기로 사각형 렌더링
+    }
+
+    const kets = {}; // 현재 눌려 있는 키보드 키의 상태를 저장하는 객체
+
+    document.addEventListener('keydown', (e) => { // [이벤트 리스너] 키보드 키가 눌렸을 때 작동
+        kets[e.key] = true;
+
+        // [FIX] 게임이 진행 중일 때 스페이스바 입력으로 스페이스바 재시작 현상 완전 차단
+        if (e.code === "Space") {
+            e.preventDefault(); // 스페이스바로 인한 스크롤 다운 방지
+            if (!gameStarted || isGameOver || isGameCleared) {
+                startGame(); // 시작 전/게임 오버/클리어 상태에서만 재시작 허용
+            }
+        }
+    });
+
+    document.addEventListener('keyup', (e) => { // [이벤트 리스너] 키보드 키에서 손을 뗐을 때 작동
+        kets[e.key] = false; // 뗸 키의 이름을 kets 객체에서 false값으로 변경
+    });
+
+    // 캔버스 마우스 클릭 시 게임 시작
+    canvas.addEventListener('click', () => {
+        if (!gameStarted || isGameOver || isGameCleared) {
+            startGame();
+        }
+    });
+
+    function movePaddle() { // [함수] 키보드 입력 상태에 맞춰 패들의 X 위치를 변경하는 함수
+        if (kets['ArrowLeft'] && paddle.x > 0) { // 왼쪽 화살표 키가 눌렸고 좌측 벽을 벗어나지 않았다면
+            paddle.x -= paddle.speed; // 패들을 왼쪽으로 이동
+        }
+        if (kets['ArrowRight'] && paddle.x < canvas.width - paddle.width) { // 오른쪽 화살표 키가 눌렸고 우측 벽을 벗어나지 않았다면
+            paddle.x += paddle.speed; // 패들을 오른쪽으로 이동
+        }
+        if(paddle.x < 0) { // 패들이 왼쪽 화면 밖으로 벗어났을 경우
+            paddle.x = 0; // 왼쪽 벽 위치(0)에 고정
+        }
+        if(paddle.x + paddle.width > canvas.width) { // 패들이 오른쪽 화면 밖으로 벗어났을 경우
+            paddle.x = canvas.width - paddle.width; // 오른쪽 벽 위치에 고정
+        }
+    }
+
+    // 움직이는 공의 초기 상태 및 속성 객체
+    const ball = {
+        x: canvas.width / 2, // 공의 초기 X 위치 (캔버스 중앙)
+        y: canvas.height - 50, // 공의 초기 Y 위치 (하단 패들 약간 위)
+        radius: 8,            // 공의 반지름 (8px)
+        dx: 4,                // X축 이동 속도 및 방향
+        dy: -4                // Y축 이동 속도 및 방향
+    };
+
+    function drawBall() { // [함수] 공을 캔버스 상에 원 형태로 그려주는 함수
+        ctx.beginPath(); // 새로운 도형 경로 시작
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); // (x, y) 좌표에 반지름 radius만큼의 원 그리기
+        ctx.fillStyle = 'tomato'; // 공 채우기 색상을 토마토색(붉은색)으로 지정
+        ctx.fill(); // 원 내부 색상 채우기
+        ctx.closePath(); // 도형 경로 닫기
+    }
+
+    function moveBall() { // [함수] 공의 위치를 업데이트하고 벽/패들 충돌 및 낙하 처리를 담당하는 함수
+        // 게임 시작 전이거나 게임 오버/클리어 상태라면 연산 중단
+        if(!gameStarted || isGameOver || isGameCleared) return;
+
+        ball.x += ball.dx; // 공의 X 좌표를 dx 속도만큼 이동
+        ball.y += ball.dy; // 공의 Y 좌표를 dy 속도만큼 이동
+
+        // 왼쪽 또는 오른쪽 벽에 부딪혔을 때 X축 방향 반전
+        if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+            ball.dx *= -1; // X축 이동 방향 반전
+        }
+        // 천장(상단 벽)에 부딪혔을 때 Y축 방향 반전
+        if (ball.y - ball.radius < 0) {
+            ball.dy *= -1; // Y축 이동 방향 반전
+        }
+
+        // 패들(받침대)과의 충돌 영역 검사
+        if (
+            ball.x > paddle.x &&
+            ball.x - ball.radius < paddle.x + paddle.width &&
+            ball.y + ball.radius > paddle.y &&
+            ball.y - ball.radius < paddle.y + paddle.height
+        ) {
+            ball.dy = -Math.abs(ball.dy); // 공이 아래로 내려오던 중 패들에 닿으면 무조건 위쪽 방향으로 반사
+        }
+
+        // 바닥(하단 영역)으로 공이 떨어진 경우
+        if(ball.y - ball.radius > canvas.height) {
+            lives--; // 목숨 1 감점
+            livesText.textContent = lives; // 화면의 목숨 수 텍스트 갱신
+
+            if(lives <= 0){ // 남은 목숨이 0 이하일 경우
+                isGameOver = true; // 얼럿창 대신 게임 오버 플래그 true 설정
+            } else {
+                resetBallAndPaddle(); // 공과 패들 위치를 초기 위치로 리셋
+            }
+        }
+    }
+
+    function resetBallAndPaddle() { // [함수] 실점 후 공과 패들의 위치를 중앙으로 다시 재배치하는 함수
+        const currentSpeed = speedTable[selectedSpeedLevel]; // 현재 선택된 속도 수치 적용
+        ball.x = canvas.width / 2; // 공 X 위치 중앙 배치
+        ball.y = canvas.height - 50; // 공 Y 위치 배치
+        ball.dx = currentSpeed * (Math.random() > 0.5 ? 1 : -1); // 무작위 좌우 방향 부여
+        ball.dy = -currentSpeed; // 선택된 속도로 위쪽 방향 지정
+        paddle.x = canvas.width / 2 - paddle.width / 2; // 패들 위치 중앙 재배치
+    }
+
+    // 벽돌 배치의 행/열, 크기 및 여백 속성 객체
+    const bricks = {
+        row: 4,          // 벽돌 줄 수 (4행)
+        column: 8,       // 한 줄당 벽돌 수 (8열)
+        width: 60,       // 벽돌 하나의 가로 너비 (60px)
+        height: 20,      // 벽돌 하나의 세로 높이 (20px)
+        padding: 10,     // 벽돌 사이의 간격 (10px)
+        offsetTop: 40,   // 상단 여백 (40px)
+        offsetLeft: 25   // 좌측 여백 (25px)
+    };
+
+    let brick = []; // 벽돌 목록 저장 배열
+
+    function initBricks() { // [함수] 벽돌 2차원 배열 데이터를 구성하는 함수
+        brick = [];
+        for (let r = 0; r < bricks.row; r++) {
+            brick[r] = [];
+            for (let c = 0; c < bricks.column; c++) {
+                brick[r][c] = { x: 0, y: 0, visible: true }; // 벽돌 존재 상태(visible: true) 설정
+            }
+        }
+    }
+
+    function drawBricks(){ // [함수] 깨지지 않고 남아있는(visible이 true인) 벽돌들을 화면에 그리는 함수
+        for(let r = 0; r < bricks.row; r++){
+            for(let c = 0; c < bricks.column; c++){
+                const b = brick[r][c];
+
+                if(b.visible){ // 벽돌이 존재하는 상태일 경우만 계산 및 그리기 실행
+                    const brickX = c * (bricks.width + bricks.padding) + bricks.offsetLeft;
+                    const brickY = r * (bricks.height + bricks.padding) + bricks.offsetTop;
+
+                    b.x = brickX; // 벽돌 X 좌표 저장
+                    b.y = brickY; // 벽돌 Y 좌표 저장
+
+                    ctx.fillStyle = '#3498db'; // 벽돌 색상을 파란색으로 지정
+                    ctx.fillRect(brickX, brickY, bricks.width, bricks.height); // 사각형 렌더링
+                }   
+            }
+        }
+    }
+
+    function checkBrickCollision() { // [함수] 공과 모든 벽돌 사이의 충돌 영역을 검사하고 파괴 처리하는 함수
+        for (let r = 0; r < bricks.row; r++) {
+            for (let c = 0; c < bricks.column; c++) {
+                const b = brick[r][c];
+
+                if (b.visible) { // 살아있는 벽돌에 대해서만 충돌 검사 수행
+                    if (
+                        ball.x + ball.radius > b.x &&
+                        ball.x - ball.radius < b.x + bricks.width &&
+                        ball.y + ball.radius > b.y &&
+                        ball.y - ball.radius < b.y + bricks.height
+                    ) {
+                        ball.dy *= -1; // 부딪힌 공의 Y축 방향 반전
+                        b.visible = false; // 부딪힌 벽돌을 파괴(숨김) 처리
+                        score++; // 점수 1점 증가
+                        scoreText.textContent = score; // 화면 점수 텍스트 갱신
+
+                        // 25% 확률로 벽돌이 파괴된 위치에서 아이템 생성
+                        if (Math.random() < 0.25) {
+                            spawnItem(b.x + bricks.width / 2, b.y + bricks.height);
+                        }
+
+                        // 전체 벽돌 개수(행 x 열)만큼 점수를 획득했을 때 승리 처리
+                        if (score === bricks.row * bricks.column) {
+                            isGameCleared = true; // 얼럿창 대신 클리어 플래그 true 설정
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // [함수] 지정된 (x, y) 좌표 위치에 드롭 아이템 객체를 생성하는 함수
+    function spawnItem(x, y) {
+        const type = Math.random() > 0.5 ? 'EXPAND' : 'LIFE'; // 50% 확률로 패들 확대(EXPAND) 또는 목숨 추가(LIFE)
+        items.push({
+            x: x,
+            y: y,
+            radius: 10,
+            dy: 2, // 아이템 낙하 속도 (2px)
+            type: type
+        });
+    }
+
+    // [함수] 낙하하는 아이템을 이동시키고 그람을 그리며, 패들 충돌을 검사하는 함수
+    function moveAndDrawItems() {
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            
+            // 게임 가동 중일 때만 아이템 이동
+            if (gameStarted && !isGameOver && !isGameCleared) {
+                item.y += item.dy;
+            }
+
+            // 아이템 동그라미 그리기
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+            ctx.fillStyle = item.type === 'EXPAND' ? '#2ecc71' : '#f1c40f'; // EXPAND: 초록색, LIFE: 노란색
+            ctx.fill();
+            
+            // 아이템 내부 텍스트 알파벳 표시
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(item.type === 'EXPAND' ? 'E' : 'L', item.x, item.y + 3);
+            ctx.closePath();
+
+            // 아이템과 패들의 충돌 검사
+            if (
+                item.x > paddle.x &&
+                item.x < paddle.x + paddle.width &&
+                item.y + item.radius > paddle.y &&
+                item.y - item.radius < paddle.y + paddle.height
+            ) {
+                applyItemEffect(item.type); // 효과 적용
+                items.splice(i, 1); // 먹은 아이템은 배열에서 제거
+                continue;
+            }
+
+            // 화면 하단 밖으로 벗어난 아이템 제거
+            if (item.y - item.radius > canvas.height) {
+                items.splice(i, 1);
+            }
+        }
+    }
+
+    // [함수] 획득한 아이템의 효과를 적용하는 함수
+    function applyItemEffect(type) {
+        if (type === 'EXPAND') { // 패들 확대 아이템인 경우
+            paddle.width = paddle.baseWidth * 1.5; // 패들 길이를 1.5배(150px)로 확대
+            
+            if (paddleExpandTimer) clearTimeout(paddleExpandTimer); // 기존 진행 중인 타이머 초기화
+            paddleExpandTimer = setTimeout(() => {
+                paddle.width = paddle.baseWidth; // 8초 후 기본 패들 길이(100px)로 복구
+            }, 8000);
+        } else if (type === 'LIFE') { // 목숨 추가 아이템인 경우
+            lives++; // 목숨 1 증가
+            livesText.textContent = lives; // 화면 표시 갱신
+        }
+    }
+
+    // [함수] 플레이어가 상단 버튼으로 속도 단계를 변경할 때 실행되는 함수
+    function setBallSpeed(level) {
+        selectedSpeedLevel = level; // 선택된 속도 단계 저장
+
+        const speedButtons = document.querySelectorAll('.speed-btn'); // 모든 속도 버튼 요소 가져오기
+        speedButtons.forEach((btn, idx) => {
+            if (idx + 1 === level) btn.classList.add('active'); // 선택된 버튼만 active 클래스 적용
+            else btn.classList.remove('active');
+        });
+
+        // 속도 변경 시 게임 상태를 대기 상태로 초기화
+        gameStarted = false;
+        isGameOver = false;
+        isGameCleared = false;
+        resetGameVars();
+    }
+
+    // [함수] 점수, 목숨, 패들, 공, 아이템 및 벽돌을 초기 대기 상태 변수로 리셋하는 함수
+    function resetGameVars() {
+        score = 0;
+        lives = 3;
+        scoreText.textContent = score;
+        livesText.textContent = lives;
+        paddle.width = paddle.baseWidth;
+        if (paddleExpandTimer) clearTimeout(paddleExpandTimer);
+        items = [];
+        initBricks();
+        resetBallAndPaddle();
+    }
+
+    // [함수] 게임 시작 버튼 클릭, 캔버스 클릭, 또는 Spacebar 입력 시 실행되는 시작 처리 함수
+    function startGame() {
+        if (!gameStarted || isGameOver || isGameCleared) {
+            resetGameVars(); // 변수 완전히 초기화
+            isGameOver = false;
+            isGameCleared = false;
+            gameStarted = true; // 게임 시작 가동 플래그 true로 변환
+        }
+    }
+
+    // [함수] 게임 시작 전 "READY?" 준비 안내 오버레이를 그려주는 함수
+    function drawStartOverlay() {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; // 반투명 검은색 배경 패널
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#28a745";
+        ctx.font = "bold 30px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("READY?", canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.fillStyle = "white";
+        ctx.font = "18px Arial";
+        ctx.fillText("화면을 클릭하거나 [Spacebar] / [게임 시작] 버튼을 누르세요.", canvas.width / 2, canvas.height / 2 + 30);
+    }
+
+    // [함수] 목숨을 모두 잃었을 때 패배 안내 오버레이를 그려주는 함수
+    function drawGameOverOverlay() {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; // 반투명 검은색 배경 패널
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#e74c3c";
+        ctx.font = "bold 32px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("GAME OVER 💥", canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.fillStyle = "white";
+        ctx.font = "18px Arial";
+        ctx.fillText("다시 시작하려면 [Spacebar] 키나 [게임 시작] 버튼을 누르세요.", canvas.width / 2, canvas.height / 2 + 30);
+    }
+
+    // [함수] 모든 벽돌을 깼을 때 승리 안내 오버레이를 그려주는 함수
+    function drawWinOverlay() {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; // 반투명 검은색 배경 패널
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "yellow";
+        ctx.font = "bold 32px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("축하합니다! ALL CLEAR! 🎉", canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.fillStyle = "white";
+        ctx.font = "18px Arial";
+        ctx.fillText("다시 시작하려면 [Spacebar] 키나 [게임 시작] 버튼을 누르세요.", canvas.width / 2, canvas.height / 2 + 30);
+    }
+
+    function drawGame() { // [함수] 프레임마다 이전 그림을 지우고 모든 게임 요소를 다시 그려주는 메인 렌더링 루프 함수
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 이전 프레임의 잔상을 캔버스 전체에서 싹 지움
+        
+        drawBricks(); // 남아있는 벽돌 그리기
+        drawPaddle(); // 패들 그리기
+        drawBall(); // 공 그리기
+        moveAndDrawItems(); // 떨어지는 아이템 이동 및 그리기
+
+        // 정상 실행 가동 상태일 때만 움직임 연산 수행
+        if (gameStarted && !isGameOver && !isGameCleared) {
+            movePaddle(); // 키보드 입력에 맞춘 패들 위치 이동
+            moveBall(); // 공 위치 이동 및 벽/패들 충돌 검사
+            checkBrickCollision(); // 공과 벽돌의 충돌 검사 실행
+        }
+
+        // 아직 시작 안 했을 때 시작 안내 패널 렌더링
+        if (!gameStarted) {
+            drawStartOverlay();
+        }
+
+        // 게임 오버 패배 시 오버레이 패널 렌더링
+        if (isGameOver) {
+            drawGameOverOverlay();
+        }
+
+        // 게임 클리어 승리 시 오버레이 패널 렌더링
+        if (isGameCleared) {
+            drawWinOverlay();
+        }
+        
+        requestAnimationFrame(drawGame); // 다음 프레임에 맞춰 drawGame 함수를 지속 재귀 호출 (게임 루프 가동)
+    }
+
+    initBricks(); // 최초 벽돌 데이터 생성
+    resetBallAndPaddle(); // 공 및 패들 위치 초기화
+    drawGame(); // 게임 프레임 메인 루프 최초 실행 (대기 상태로 렌더링 시작)
+</script>
+
+</body>
+
+</html>
