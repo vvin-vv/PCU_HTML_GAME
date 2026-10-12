@@ -13,9 +13,10 @@
 <body>
     <h1>Snake 게임</h1>
     <p>점수: <span id="score">0</span> | 최고 점수: <span id="highScore">0</span> | 레벨: <span id="level">1</span></p>
-    <p>조작: 방향키 또는 WASD / 스페이스바: 일시정지</p>
+    <p>조작: 방향키 또는 WASD / 스페이스바: 일시정지 / X: 꼬리 자르기</p>
     <button id="pauseButton">일시정지</button>
     <button id="restartButton">다시 시작</button>
+    <button id="cutTailButton">꼬리 자르기</button>
     <p id="message">먹이를 먹으면 조금씩 빨라집니다.</p>
     <canvas id="gameCanvas" width="400" height="400"></canvas>
 
@@ -27,6 +28,7 @@
         const levelText = document.getElementById("level");
         const pauseButton = document.getElementById("pauseButton");
         const restartButton = document.getElementById("restartButton");
+        const cutTailButton = document.getElementById("cutTailButton");
         const messageText = document.getElementById("message");
         let score = 0;
         let highScore = Number(localStorage.getItem("snakeHighScore")) || 0;
@@ -47,6 +49,8 @@
         let paused = false;
         let gameSpeed = 500;
         let gameTimer;
+        let stomachAche = false;
+        let stomachAcheTimer;
 
         function drawTile(x, y, color) {
             ctx.fillStyle = color;
@@ -83,6 +87,7 @@
                 event.preventDefault();
             }
             if (key === " " && !event.repeat) togglePause();
+            if (key === "x" && !event.repeat) cutTail();
 
             if ((key === "arrowup" || key === "w") && dy !== 1) {
                 nextDx = 0;
@@ -116,6 +121,7 @@
                 updateLevel();
                 moveFood();
                 updateSpeed();
+                if (Math.random() < 0.1) startStomachAche();
             } else {
                 snake.pop();
             }
@@ -201,9 +207,42 @@
             const newSpeed = Math.max(120, 500 - score * 25);
             if (newSpeed !== gameSpeed) {
                 gameSpeed = newSpeed;
-                clearInterval(gameTimer);
-                gameTimer = setInterval(gameLoop, gameSpeed);
+                applyGameSpeed();
             }
+        }
+
+        function applyGameSpeed() {
+            clearInterval(gameTimer);
+            const currentSpeed = stomachAche ? gameSpeed * 0.8 : gameSpeed;
+            gameTimer = setInterval(gameLoop, currentSpeed);
+        }
+
+        function startStomachAche() {
+            stomachAche = true;
+            clearTimeout(stomachAcheTimer);
+            applyGameSpeed();
+            messageText.textContent = "배탈 발생! 5초 동안 속도가 20% 빨라집니다.";
+
+            stomachAcheTimer = setTimeout(function() {
+                stomachAche = false;
+                applyGameSpeed();
+                if (!gameOver && !paused) {
+                    messageText.textContent = "배탈 효과가 끝났습니다.";
+                }
+            }, 5000);
+        }
+
+        function cutTail() {
+            if (gameOver || paused) return;
+            if (snake.length <= 2) {
+                messageText.textContent = "꼬리가 너무 짧아서 자를 수 없습니다.";
+                return;
+            }
+
+            const cutPoint = Math.ceil(snake.length / 2);
+            const cutCount = snake.length - cutPoint;
+            snake.splice(cutPoint);
+            messageText.textContent = "꼬리 " + cutCount + "칸을 잘랐습니다.";
         }
 
         function togglePause() {
@@ -229,11 +268,12 @@
             gameOver = false;
             paused = false;
             gameSpeed = 500;
+            stomachAche = false;
+            clearTimeout(stomachAcheTimer);
             pauseButton.disabled = false;
             pauseButton.textContent = "일시정지";
             messageText.textContent = "먹이를 먹으면 조금씩 빨라집니다.";
-            clearInterval(gameTimer);
-            gameTimer = setInterval(gameLoop, gameSpeed);
+            applyGameSpeed();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawSnake();
             drawFood();
@@ -242,6 +282,7 @@
 
         pauseButton.addEventListener("click", togglePause);
         restartButton.addEventListener("click", restartGame);
+        cutTailButton.addEventListener("click", cutTail);
         gameTimer = setInterval(gameLoop, gameSpeed);
     </script>
 </body>
